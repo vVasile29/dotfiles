@@ -52,7 +52,7 @@ end
 beautiful.init(gears.filesystem.get_themes_dir() .. "default/theme.lua")
 
 -- This is used later as the default terminal and editor to run.
-terminal = "x-terminal-emulator"
+terminal = "alacritty"
 editor = os.getenv("EDITOR") or "editor"
 editor_cmd = terminal .. " -e " .. editor
 
@@ -113,19 +113,73 @@ else
 end
 
 
-mylauncher = awful.widget.launcher({ image = beautiful.awesome_icon,
-                                     menu = mymainmenu })
-
 -- Menubar configuration
 menubar.utils.terminal = terminal -- Set the terminal for applications that require it
 -- }}}
 
 -- Keyboard map indicator and switcher
-mykeyboardlayout = awful.widget.keyboardlayout()
+-- mykeyboardlayout = awful.widget.keyboardlayout()
 
 -- {{{ Wibar
--- Create a textclock widget
-mytextclock = wibox.widget.textclock()
+local dpi = beautiful.xresources.apply_dpi
+-- Dracula palette: https://draculatheme.com/contribute
+local bar = {
+    bg = "#282a36",
+    surface = "#44475a",
+    fg = "#f8f8f2",
+    muted = "#6272a4",
+    accent = "#bd93f9",
+    pink = "#ff79c6",
+    green = "#50fa7b",
+    urgent = "#ff5555",
+    warning = "#f1fa8c",
+    font = "Lato 10",
+}
+
+local function bar_shape(cr, width, height)
+    gears.shape.rounded_rect(cr, width, height, dpi(10))
+end
+
+local function bar_chip(widget, bg, fg)
+    return wibox.widget {
+        {
+            widget,
+            left = dpi(10),
+            right = dpi(10),
+            widget = wibox.container.margin,
+        },
+        bg = bg or bar.surface,
+        fg = fg or bar.fg,
+        shape = bar_shape,
+        widget = wibox.container.background,
+    }
+end
+
+beautiful.border_focus = bar.accent
+beautiful.border_normal = bar.surface
+beautiful.bg_systray = bar.bg
+beautiful.taglist_squares_sel = nil
+beautiful.taglist_squares_unsel = nil
+beautiful.tooltip_bg = bar.bg
+beautiful.tooltip_fg = bar.fg
+beautiful.tooltip_border_color = bar.accent
+beautiful.tooltip_font = bar.font
+
+-- Share battery updates across screens, without starting an ACPI listener per bar.
+local battery = require("battery-widget") {
+    adapter = "BAT0",
+    ac = "ADP1",
+    ac_prefix = "AC ",
+    battery_prefix = "",
+    widget_font = bar.font,
+    widget_text = "${color_on}${AC_BAT}${percent}%${color_off}",
+    percent_colors = {
+        { 20, bar.urgent },
+        { 40, bar.warning },
+        { 100, bar.green },
+    },
+    listen = false,
+}
 
 -- Create a wibox for each screen and add it
 local taglist_buttons = gears.table.join(
@@ -167,16 +221,8 @@ local tasklist_buttons = gears.table.join(
                                               awful.client.focus.byidx(-1)
                                           end))
 
-local function set_wallpaper(s)
-    -- Wallpaper
-    if beautiful.wallpaper then
-        local wallpaper = beautiful.wallpaper
-        -- If wallpaper is a function, call it with the screen
-        if type(wallpaper) == "function" then
-            wallpaper = wallpaper(s)
-        end
-        gears.wallpaper.maximized(wallpaper, s, true)
-    end
+local function set_wallpaper()
+    gears.wallpaper.set("#000000")
 end
 
 -- Re-set wallpaper when a screen's geometry changes (e.g. different resolution)
@@ -184,16 +230,17 @@ screen.connect_signal("property::geometry", set_wallpaper)
 
 awful.screen.connect_for_each_screen(function(s)
     -- Wallpaper
-    set_wallpaper(s)
+    set_wallpaper()
 
     -- Each screen has its own tag table.
     awful.tag({ "1", "2", "3", "4", "5", "6", "7", "8", "9" }, s, awful.layout.layouts[1])
 
     -- Create a promptbox for each screen
-    s.mypromptbox = awful.widget.prompt()
+    s.mypromptbox = awful.widget.prompt { font = bar.font }
     -- Create an imagebox widget which will contain an icon indicating which layout we're using.
     -- We need one layoutbox per screen.
     s.mylayoutbox = awful.widget.layoutbox(s)
+    s.mylayoutbox.image = gears.color.recolor_image(s.mylayoutbox.image, bar.accent)
     s.mylayoutbox:buttons(gears.table.join(
                            awful.button({ }, 1, function () awful.layout.inc( 1) end),
                            awful.button({ }, 3, function () awful.layout.inc(-1) end),
@@ -203,49 +250,149 @@ awful.screen.connect_for_each_screen(function(s)
     s.mytaglist = awful.widget.taglist {
         screen  = s,
         filter  = awful.widget.taglist.filter.all,
-        buttons = taglist_buttons
+        buttons = taglist_buttons,
+        style = {
+            font = "Lato Bold 10",
+            bg_focus = bar.accent,
+            fg_focus = bar.bg,
+            bg_occupied = bar.bg,
+            fg_occupied = bar.pink,
+            bg_empty = bar.bg,
+            fg_empty = bar.muted,
+            bg_urgent = bar.urgent,
+            fg_urgent = bar.bg,
+            shape = bar_shape,
+        },
+        layout = {
+            spacing = dpi(4),
+            layout = wibox.layout.fixed.horizontal,
+        },
+        widget_template = {
+            {
+                id = "text_role",
+                align = "center",
+                widget = wibox.widget.textbox,
+            },
+            id = "background_role",
+            forced_width = dpi(28),
+            widget = wibox.container.background,
+        },
     }
 
     -- Create a tasklist widget
     s.mytasklist = awful.widget.tasklist {
         screen  = s,
         filter  = awful.widget.tasklist.filter.currenttags,
-        buttons = tasklist_buttons
+        buttons = tasklist_buttons,
+        style = {
+            font = bar.font,
+            bg_normal = bar.bg,
+            fg_normal = bar.muted,
+            bg_focus = bar.bg,
+            fg_focus = bar.fg,
+            bg_minimize = bar.bg,
+            fg_minimize = bar.muted,
+            bg_urgent = bar.urgent,
+            fg_urgent = bar.bg,
+            shape = bar_shape,
+        },
+        layout = {
+            spacing = dpi(6),
+            max_widget_size = dpi(240),
+            layout = wibox.layout.flex.horizontal,
+        },
     }
 
-    -- Create the wibox
-    s.mywibox = awful.wibar({ position = "top", screen = s })
+    s.mywibox = awful.wibar {
+        position = "top",
+        screen = s,
+        height = dpi(46),
+        bg = "#00000000",
+        fg = bar.fg,
+    }
 
-    -- Import module:
-    local battery_widget = require("battery-widget")
+    local launcher = bar_chip(wibox.widget {
+        image = require("beautiful.theme_assets").awesome_icon(
+            dpi(20), bar.bg, bar.accent
+        ),
+        forced_width = dpi(20),
+        widget = wibox.widget.imagebox,
+    }, bar.bg)
+    launcher:buttons(gears.table.join(
+        awful.button({}, 1, function() mymainmenu:toggle() end),
+        awful.button({}, 3, function() awful.spawn(terminal) end)
+    ))
+    launcher:connect_signal("mouse::enter", function() launcher.bg = bar.surface end)
+    launcher:connect_signal("mouse::leave", function() launcher.bg = bar.bg end)
+    awful.tooltip { objects = { launcher }, text = "Applications | Right-click: terminal" }
 
-    -- Add widgets to the wibox
-    s.mywibox:setup {
+    s.mytextclock = wibox.widget.textclock(
+        '<span foreground="' .. bar.muted .. '">%a %d %b</span>  '
+            .. '<span foreground="' .. bar.accent .. '"><b>%H:%M</b></span>', 30
+    )
+    s.mytextclock.font = bar.font
+    awful.tooltip {
+        objects = { s.mytextclock },
+        timer_function = function() return os.date("%A, %d %B %Y") end,
+    }
+
+    local tray = wibox.widget.systray()
+    tray:set_screen("primary")
+    tray:set_base_size(dpi(18))
+
+    local content = wibox.widget {
         layout = wibox.layout.align.horizontal,
         { -- Left widgets
             layout = wibox.layout.fixed.horizontal,
-            mylauncher,
+            spacing = dpi(10),
+            launcher,
             s.mytaglist,
             s.mypromptbox,
         },
-        s.mytasklist, -- Middle widget
+        {
+            s.mytasklist,
+            left = dpi(16),
+            right = dpi(16),
+            widget = wibox.container.margin,
+        },
         { -- Right widgets
-	    layout = wibox.layout.fixed.horizontal,
-            mykeyboardlayout,
-            wibox.widget.systray(),
-            mytextclock,
-	    battery_widget {
-            -- pass options here
-	        adapter = "BAT0",
-    		percent_colors = {
-        	    { 25, "red"   },
-        	    { 50, "orange"},
-        	    {999, "green" },
-    		},
-		listen = true,
+            layout = wibox.layout.fixed.horizontal,
+            spacing = dpi(8),
+            {
+                tray,
+                top = dpi(5),
+                bottom = dpi(5),
+                widget = wibox.container.margin,
             },
-	    s.mylayoutbox,
-	},
+            bar_chip(battery.widget, bar.bg),
+            bar_chip(s.mytextclock, bar.bg),
+            {
+                s.mylayoutbox,
+                margins = dpi(6),
+                widget = wibox.container.margin,
+            },
+        },
+    }
+
+    s.mywibox:setup {
+        {
+            {
+                content,
+                left = dpi(8),
+                right = dpi(8),
+                top = dpi(4),
+                bottom = dpi(4),
+                widget = wibox.container.margin,
+            },
+            bg = bar.bg,
+            shape = bar_shape,
+            widget = wibox.container.background,
+        },
+        left = dpi(10),
+        right = dpi(10),
+        top = dpi(6),
+        bottom = dpi(6),
+        widget = wibox.container.margin,
     }
 
 end)
@@ -265,24 +412,40 @@ globalkeys = gears.table.join(
 
     awful.key({"Mod1"}, "l", function () awful.util.spawn("xscreensaver-command -lock") end),
     
-    -- volume row
 
-    awful.key({}, "XF86AudioRaiseVolume", 
-    	function () 
-	    awful.util.spawn("pactl -- set-sink-volume 0 +10%", false) 
-	end),
-    awful.key({}, "XF86AudioLowerVolume", 
-    	function () 
-	    awful.util.spawn("pactl -- set-sink-volume 0 -10%", false) end),
-    awful.key({}, "XF86AudioMute", 
-    	function () 
-		awful.util.spawn("pactl set-sink-mute 0 toggle", false) 
-	end),
+-- volume
 
-    -- monitor brightness
+awful.key({ "Control" }, "XF86AudioRaiseVolume",
+    function ()
+        awful.spawn("pactl set-sink-volume @DEFAULT_SINK@ +10%", false)
+    end),
 
-    awful.key({}, "XF86MonBrightnessDown", function () awful.util.spawn_with_shell("xbacklight -dec 5") end),
-awful.key({}, "XF86MonBrightnessUp", function () awful.util.spawn_with_shell("xbacklight -inc 5") end),
+awful.key({ "Control" }, "XF86AudioLowerVolume",
+    function ()
+        awful.spawn("pactl set-sink-volume @DEFAULT_SINK@ -10%", false)
+    end),
+
+awful.key({ "Control" }, "XF86AudioMute",
+    function ()
+        awful.spawn("pactl set-sink-mute @DEFAULT_SINK@ toggle", false)
+    end),
+
+awful.key({ "Control" }, "XF86AudioMicMute",
+    function ()
+        awful.spawn("pactl set-source-mute @DEFAULT_SOURCE@ toggle", false)
+    end),
+
+-- brightness
+
+awful.key({ "Control" }, "XF86MonBrightnessDown",
+    function ()
+        awful.spawn("brightnessctl set 5%-", false)
+    end),
+
+awful.key({ "Control" }, "XF86MonBrightnessUp",
+    function ()
+        awful.spawn("brightnessctl set +5%", false)
+    end),
 
 
     -- preconfigured stuff
@@ -307,8 +470,8 @@ awful.key({}, "XF86MonBrightnessUp", function () awful.util.spawn_with_shell("xb
         end,
         {description = "focus previous by index", group = "client"}
     ),
-    awful.key({ modkey,           }, "w", function () mymainmenu:show() end,
-              {description = "show main menu", group = "awesome"}),
+    awful.key({ modkey,           }, "w", function () awful.spawn("rofi -show window") end,
+              {description = "show window selector", group = "client"}),
 
     -- Layout manipulation
     awful.key({ modkey, "Shift"   }, "j", function () awful.client.swap.byidx(  1)    end,
@@ -381,8 +544,9 @@ awful.key({}, "XF86MonBrightnessUp", function () awful.util.spawn_with_shell("xb
                   }
               end,
               {description = "lua execute prompt", group = "awesome"}),
-    -- Menubar
-      awful.key({ modkey }, "p", function() menubar.show() end, {description = "show the menubar", group = "launcher"})
+    -- Application drawer
+    awful.key({ modkey }, "p", function() awful.spawn("rofi -show drun") end,
+              {description = "show application drawer", group = "launcher"})
 
     -- dmenu
     --awful.key({ modkey}, "p", function () awful.util.spawn_with_shell("~/.config/dmenu") end)

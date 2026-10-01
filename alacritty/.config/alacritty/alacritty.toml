@@ -1,0 +1,10 @@
+
+[window.padding]
+x = 10
+y = 10
+
+[general]
+import = ["~/.config/alacritty/themes/dracula.toml"]
+
+[keyboard]
+bindings = [ { key = "Return", mods = "Shift", chars = "\n" } ]

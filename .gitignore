@@ -1,0 +1,20 @@
+# Credentials and local environment overrides.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Temporary forwarding link for Alacritty instances started before migration.
+/alacritty/alacritty.toml
+
+# Editor and operating-system artifacts.
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Generated caches and logs.
+__pycache__/
+.cache/
+*.log

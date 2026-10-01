@@ -1,0 +1,3 @@
+# Never deploy the local forwarding link used by pre-migration terminals.
+^/alacritty\.toml$
+\.git
