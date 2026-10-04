@@ -49,7 +49,17 @@ end
 
 -- {{{ Variable definitions
 -- Themes define colours, icons, font and wallpapers.
-beautiful.init(gears.filesystem.get_themes_dir() .. "default/theme.lua")
+beautiful.init(gears.filesystem.get_configuration_dir() .. "theme.lua")
+local controls = require("controls")
+naughty.config.padding = beautiful.xresources.apply_dpi(10)
+naughty.config.spacing = beautiful.xresources.apply_dpi(8)
+for name, color in pairs({ critical = beautiful.palette.urgent,
+    warn = beautiful.palette.warning, ok = beautiful.palette.green,
+    info = beautiful.palette.accent }) do
+    naughty.config.presets[name].bg = beautiful.palette.bg
+    naughty.config.presets[name].fg = beautiful.palette.fg
+    naughty.config.presets[name].border_color = color
+end
 
 -- This is used later as the default terminal and editor to run.
 terminal = "alacritty"
@@ -122,23 +132,8 @@ menubar.utils.terminal = terminal -- Set the terminal for applications that requ
 
 -- {{{ Wibar
 local dpi = beautiful.xresources.apply_dpi
--- Dracula palette: https://draculatheme.com/contribute
-local bar = {
-    bg = "#282a36",
-    surface = "#44475a",
-    fg = "#f8f8f2",
-    muted = "#6272a4",
-    accent = "#bd93f9",
-    pink = "#ff79c6",
-    green = "#50fa7b",
-    urgent = "#ff5555",
-    warning = "#f1fa8c",
-    font = "Lato 10",
-}
-
-local function bar_shape(cr, width, height)
-    gears.shape.rounded_rect(cr, width, height, dpi(10))
-end
+local bar = beautiful.palette
+local bar_shape = beautiful.rounded_shape
 
 local function bar_chip(widget, bg, fg)
     return wibox.widget {
@@ -154,16 +149,6 @@ local function bar_chip(widget, bg, fg)
         widget = wibox.container.background,
     }
 end
-
-beautiful.border_focus = bar.accent
-beautiful.border_normal = bar.surface
-beautiful.bg_systray = bar.bg
-beautiful.taglist_squares_sel = nil
-beautiful.taglist_squares_unsel = nil
-beautiful.tooltip_bg = bar.bg
-beautiful.tooltip_fg = bar.fg
-beautiful.tooltip_border_color = bar.accent
-beautiful.tooltip_font = bar.font
 
 -- Share battery updates across screens, without starting an ACPI listener per bar.
 local battery = require("battery-widget") {
@@ -222,7 +207,7 @@ local tasklist_buttons = gears.table.join(
                                           end))
 
 local function set_wallpaper()
-    gears.wallpaper.set("#000000")
+    gears.wallpaper.set(bar.backdrop)
 end
 
 -- Re-set wallpaper when a screen's geometry changes (e.g. different resolution)
@@ -237,15 +222,6 @@ awful.screen.connect_for_each_screen(function(s)
 
     -- Create a promptbox for each screen
     s.mypromptbox = awful.widget.prompt { font = bar.font }
-    -- Create an imagebox widget which will contain an icon indicating which layout we're using.
-    -- We need one layoutbox per screen.
-    s.mylayoutbox = awful.widget.layoutbox(s)
-    s.mylayoutbox.image = gears.color.recolor_image(s.mylayoutbox.image, bar.accent)
-    s.mylayoutbox:buttons(gears.table.join(
-                           awful.button({ }, 1, function () awful.layout.inc( 1) end),
-                           awful.button({ }, 3, function () awful.layout.inc(-1) end),
-                           awful.button({ }, 4, function () awful.layout.inc( 1) end),
-                           awful.button({ }, 5, function () awful.layout.inc(-1) end)))
     -- Create a taglist widget
     s.mytaglist = awful.widget.taglist {
         screen  = s,
@@ -331,6 +307,15 @@ awful.screen.connect_for_each_screen(function(s)
             .. '<span foreground="' .. bar.accent .. '"><b>%H:%M</b></span>', 30
     )
     s.mytextclock.font = bar.font
+    s.calendar = awful.widget.calendar_popup.month {
+        screen = s,
+        font = bar.font,
+        start_sunday = false,
+        spacing = dpi(4),
+        margin = dpi(10),
+        bg = bar.bg,
+    }
+    s.calendar:attach(s.mytextclock, "tr", { on_hover = false })
     awful.tooltip {
         objects = { s.mytextclock },
         timer_function = function() return os.date("%A, %d %B %Y") end,
@@ -366,11 +351,6 @@ awful.screen.connect_for_each_screen(function(s)
             },
             bar_chip(battery.widget, bar.bg),
             bar_chip(s.mytextclock, bar.bg),
-            {
-                s.mylayoutbox,
-                margins = dpi(6),
-                widget = wibox.container.margin,
-            },
         },
     }
 
@@ -410,42 +390,34 @@ root.buttons(gears.table.join(
 globalkeys = gears.table.join(
     -- Lock screen
 
-    awful.key({"Mod1"}, "l", function () awful.util.spawn("xscreensaver-command -lock") end),
+    awful.key({"Mod1"}, "l", function() controls.lock() end),
+    awful.key({ modkey, "Shift" }, "F12", function() controls.lock() end,
+              {description = "lock screen", group = "session"}),
+    awful.key({ modkey }, "F5", function() controls.brightness(false) end,
+              {description = "lower brightness", group = "media"}),
+    awful.key({ modkey }, "F6", function() controls.brightness(true) end,
+              {description = "raise brightness", group = "media"}),
+    awful.key({ modkey, "Shift" }, "Escape", controls.power_menu,
+              {description = "power menu", group = "session"}),
     
 
 -- volume
 
-awful.key({ "Control" }, "XF86AudioRaiseVolume",
-    function ()
-        awful.spawn("pactl set-sink-volume @DEFAULT_SINK@ +10%", false)
-    end),
-
-awful.key({ "Control" }, "XF86AudioLowerVolume",
-    function ()
-        awful.spawn("pactl set-sink-volume @DEFAULT_SINK@ -10%", false)
-    end),
-
-awful.key({ "Control" }, "XF86AudioMute",
-    function ()
-        awful.spawn("pactl set-sink-mute @DEFAULT_SINK@ toggle", false)
-    end),
-
-awful.key({ "Control" }, "XF86AudioMicMute",
-    function ()
-        awful.spawn("pactl set-source-mute @DEFAULT_SOURCE@ toggle", false)
-    end),
+awful.key({}, "XF86AudioRaiseVolume", function() controls.audio("up") end),
+awful.key({}, "XF86AudioLowerVolume", function() controls.audio("down") end),
+awful.key({}, "XF86AudioMute", function() controls.audio("mute") end),
+awful.key({}, "XF86AudioMicMute", function() controls.audio("mic") end),
+awful.key({ "Control" }, "XF86AudioRaiseVolume", function() controls.audio("up") end),
+awful.key({ "Control" }, "XF86AudioLowerVolume", function() controls.audio("down") end),
+awful.key({ "Control" }, "XF86AudioMute", function() controls.audio("mute") end),
+awful.key({ "Control" }, "XF86AudioMicMute", function() controls.audio("mic") end),
 
 -- brightness
 
-awful.key({ "Control" }, "XF86MonBrightnessDown",
-    function ()
-        awful.spawn("brightnessctl set 5%-", false)
-    end),
-
-awful.key({ "Control" }, "XF86MonBrightnessUp",
-    function ()
-        awful.spawn("brightnessctl set +5%", false)
-    end),
+awful.key({}, "XF86MonBrightnessDown", function() controls.brightness(false) end),
+awful.key({}, "XF86MonBrightnessUp", function() controls.brightness(true) end),
+awful.key({ "Control" }, "XF86MonBrightnessDown", function() controls.brightness(false) end),
+awful.key({ "Control" }, "XF86MonBrightnessUp", function() controls.brightness(true) end),
 
 
     -- preconfigured stuff
@@ -786,15 +758,10 @@ client.connect_signal("focus", function(c) c.border_color = beautiful.border_foc
 client.connect_signal("unfocus", function(c) c.border_color = beautiful.border_normal end)
 -- }}}
 
--- Set gap distance (also for single window/client)
-
-beautiful.useless_gap = 5
-beautiful.gap_single_client = true
-
 -- rounded windows/clients
 
 client.connect_signal("manage", function (c)
-    c.shape = gears.shape.rounded_rect
+    if not c.fullscreen then c.shape = beautiful.rounded_shape end
 end)
 
 -- Detect fullscreen state and update client properties
@@ -804,12 +771,21 @@ client.connect_signal("property::fullscreen", function (c)
         c.shape = nil
     else
         -- Set rounded corners to true for non-fullscreen clients
-        c.shape = gears.shape.rounded_rect
+        c.shape = beautiful.rounded_shape
     end
 end)
 
 -- Autostart Applications
-awful.util.spawn_with_shell("~/scripts/monitor_hotplug.sh")
-awful.util.spawn_with_shell("~/scripts/connect_keyboard.sh")
-awful.util.spawn_with_shell("/usr/bin/syncthing serve --no-browser --logfile=default")
-awful.util.spawn_with_shell("xscreensaver -no-splash")
+for _, script in ipairs({ "monitor_hotplug.sh", "connect_keyboard.sh" }) do
+    local path = os.getenv("HOME") .. "/scripts/" .. script
+    if gears.filesystem.file_readable(path) then awful.spawn(path) end
+end
+-- These daemons do not create clients, so spawn.once cannot detect them.
+awful.spawn.with_shell("pgrep -u \"$(id -u)\" -x syncthing >/dev/null || "
+    .. "exec /usr/bin/syncthing serve --no-browser --logfile=default")
+-- Merge only our lock-dialog resources; preserve other X resources.
+awful.spawn.easy_async({ "xrdb", "-merge", os.getenv("HOME") .. "/.Xresources" }, function()
+    awful.spawn.with_shell("pgrep -u \"$(id -u)\" -x xscreensaver >/dev/null || "
+        .. "exec xscreensaver -no-splash")
+end)
+awful.spawn("gsettings set org.gnome.desktop.interface color-scheme prefer-dark")

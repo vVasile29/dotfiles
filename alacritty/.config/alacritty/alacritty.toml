@@ -1,7 +1,15 @@
+[window]
+opacity = 1.0
 
 [window.padding]
 x = 10
 y = 10
+
+[font]
+size = 10.5
+
+[font.normal]
+family = "DejaVu Sans Mono"
 
 [general]
 import = ["~/.config/alacritty/themes/dracula.toml"]

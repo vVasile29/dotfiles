@@ -1,0 +1,16 @@
+! Blank and lock after ten minutes of inactivity, without a grace period.
+mode: blank
+timeout: 0:10:00
+lock: True
+lockTimeout: 0:00:00
+dpmsEnabled: True
+dpmsQuickOff: False
+dpmsStandby: 0:10:00
+dpmsSuspend: 0:10:00
+dpmsOff: 0:15:00
+fade: False
+unfade: False
+splash: False
+
+! Dialog colors and fonts are defined in the companion .Xresources.
+dialogTheme: darkgray

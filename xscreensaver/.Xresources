@@ -1,0 +1,23 @@
+! XScreenSaver 6.x dialog resources. No compositor or animated lock background.
+! Match the application class; * spans theme levels and Dialog matches passwd/splash.
+XScreenSaver*Dialog.headingFont: Lato Bold 16
+XScreenSaver*Dialog.bodyFont: Lato 12
+XScreenSaver*Dialog.errorFont: Lato Bold 12
+XScreenSaver*Dialog.labelFont: Lato Bold 12
+XScreenSaver*Dialog.unameFont: Lato 10
+XScreenSaver*Dialog.buttonFont: Lato Bold 12
+XScreenSaver*Dialog.dateFont: Lato 10
+XScreenSaver*darkgray.Dialog.foreground: #f8f8f2
+XScreenSaver*darkgray.Dialog.background: #282a36
+XScreenSaver*darkgray.Dialog.topShadowColor: #44475a
+XScreenSaver*darkgray.Dialog.bottomShadowColor: #282a36
+XScreenSaver*darkgray.Dialog.borderColor: #6272a4
+XScreenSaver*darkgray.Dialog.borderWidth: 1
+XScreenSaver*darkgray.Dialog.text.foreground: #f8f8f2
+XScreenSaver*darkgray.Dialog.text.background: #44475a
+XScreenSaver*darkgray.Dialog.button.foreground: #282a36
+XScreenSaver*darkgray.Dialog.button.background: #bd93f9
+XScreenSaver*darkgray.Dialog.logo.background: #282a36
+XScreenSaver*darkgray.Dialog.error.foreground: #ff5555
+XScreenSaver*darkgray.Dialog.thermometer.foreground: #bd93f9
+XScreenSaver*darkgray.Dialog.thermometer.background: #44475a

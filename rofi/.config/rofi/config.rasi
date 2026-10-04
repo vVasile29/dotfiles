@@ -1,0 +1,104 @@
+/* Opaque Dracula, retaining the live launcher behavior and input layout. */
+configuration {
+    show-icons: true;
+    icon-theme: "Adwaita";
+    display-drun: "";
+    disable-history: false;
+}
+
+* {
+    font: "Lato 12";
+    foreground: #f8f8f2;
+    background-color: #282a36;
+    text-color: @foreground;
+    active-background: #44475a;
+    urgent-background: #ff5555;
+    selected-background: #bd93f9;
+    selected-foreground: #282a36;
+    bordercolor: #6272a4;
+}
+
+window {
+    width: calc(600px min 90%);
+    background-color: @background-color;
+    border: 2px;
+    border-radius: 10px;
+    border-color: @bordercolor;
+    padding: 16px;
+}
+
+mainbox {
+    border: 0px;
+    padding: 0px;
+    spacing: 12px;
+}
+
+message {
+    border: 0px;
+    padding: 8px;
+}
+
+listview {
+    lines: 8;
+    columns: 1;
+    fixed-height: true;
+    dynamic: false;
+    border: 0px;
+    spacing: 4px;
+    scrollbar: false;
+    padding: 0px;
+}
+
+element {
+    border: 0px;
+    border-radius: 6px;
+    padding: 8px 10px;
+    spacing: 10px;
+}
+
+element normal.normal, element alternate.normal {
+    background-color: @background-color;
+    text-color: @foreground;
+}
+
+element normal.urgent, element alternate.urgent {
+    background-color: @urgent-background;
+    text-color: @selected-foreground;
+}
+
+element normal.active, element alternate.active {
+    background-color: @active-background;
+    text-color: @foreground;
+}
+
+element selected.normal, element selected.active, element selected.urgent, button selected {
+    background-color: @selected-background;
+    text-color: @selected-foreground;
+}
+
+element-text, element-icon {
+    background-color: inherit;
+    text-color: inherit;
+    padding: 0px;
+}
+
+element-text {
+    vertical-align: 0.5;
+    highlight: bold;
+}
+
+element-icon {
+    size: 24px;
+}
+
+inputbar {
+    spacing: 8px;
+    padding: 8px 10px;
+    children: [ prompt, textbox-prompt-colon, entry, case-indicator ];
+}
+
+textbox-prompt-colon {
+    expand: false;
+    str: ">";
+    text-color: @selected-background;
+}
