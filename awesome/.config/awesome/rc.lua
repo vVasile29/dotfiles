@@ -50,8 +50,10 @@ end
 -- {{{ Variable definitions
 -- Themes define colours, icons, font and wallpapers.
 beautiful.init(gears.filesystem.get_configuration_dir() .. "theme.lua")
+local profile = require("machine_profile").load()
 local controls = require("controls")
 local status = require("status")
+local tray = require("tray")
 naughty.config.padding = beautiful.xresources.apply_dpi(10)
 naughty.config.spacing = beautiful.xresources.apply_dpi(8)
 for name, color in pairs({ critical = beautiful.palette.urgent,
@@ -60,6 +62,13 @@ for name, color in pairs({ critical = beautiful.palette.urgent,
     naughty.config.presets[name].bg = beautiful.palette.bg
     naughty.config.presets[name].fg = beautiful.palette.fg
     naughty.config.presets[name].border_color = color
+end
+if profile.error then
+    gears.timer.delayed_call(function()
+        naughty.notify { preset = naughty.config.presets.critical,
+            title = "Invalid machine profile; using safe defaults",
+            text = gears.string.xml_escape(profile.error) }
+    end)
 end
 
 -- This is used later as the default terminal and editor to run.
@@ -151,21 +160,20 @@ local function bar_chip(widget, bg, fg)
     }
 end
 
--- Share battery updates across screens, without starting an ACPI listener per bar.
-local battery = require("battery-widget") {
-    adapter = "BAT0",
-    ac = "ADP1",
-    ac_prefix = "AC ",
-    battery_prefix = "",
-    widget_font = bar.font,
-    widget_text = "${color_on}${AC_BAT}${percent}%${color_off}",
-    percent_colors = {
-        { 20, bar.urgent },
-        { 40, bar.warning },
-        { 100, bar.green },
-    },
-    listen = false,
-}
+-- Detect adapters instead of hardcoding BAT0/ADP1, and share updates across screens.
+local batteries = {}
+if profile.battery then
+    for _, adapter in ipairs(profile.hardware.batteries) do
+        batteries[#batteries + 1] = require("battery-widget") {
+            adapter = adapter, ac = profile.hardware.ac,
+            ac_prefix = "AC ", battery_prefix = "",
+            widget_font = bar.font,
+            widget_text = "${color_on}${AC_BAT}${percent}%${color_off}",
+            percent_colors = { { 20, bar.urgent }, { 40, bar.warning }, { 100, bar.green } },
+            listen = false,
+        }
+    end
+end
 
 -- Create a wibox for each screen and add it
 local taglist_buttons = gears.table.join(
@@ -323,11 +331,13 @@ awful.screen.connect_for_each_screen(function(s)
         timer_function = function() return os.date("%A, %d %B %Y") end,
     }
 
-    local tray = wibox.widget.systray()
-    tray:set_screen("primary")
-    tray:set_base_size(dpi(18))
-
     s.mystatus = status.new(terminal)
+    s.mytraychip = tray.new(s)
+    local right_widgets = wibox.layout.fixed.horizontal()
+    right_widgets.spacing = dpi(8)
+    right_widgets:add(s.mystatus)
+    for _, battery in ipairs(batteries) do right_widgets:add(bar_chip(battery.widget, bar.backdrop)) end
+    right_widgets:add(s.mytraychip, bar_chip(s.mytextclock, bar.bg))
 
     local content = wibox.widget {
         layout = wibox.layout.align.horizontal,
@@ -344,19 +354,7 @@ awful.screen.connect_for_each_screen(function(s)
             right = dpi(16),
             widget = wibox.container.margin,
         },
-        { -- Right widgets
-            layout = wibox.layout.fixed.horizontal,
-            spacing = dpi(8),
-            s.mystatus,
-            {
-                tray,
-                top = dpi(5),
-                bottom = dpi(5),
-                widget = wibox.container.margin,
-            },
-            bar_chip(battery.widget, bar.bg),
-            bar_chip(s.mytextclock, bar.bg),
-        },
+        right_widgets,
     }
 
     s.mywibox:setup {
@@ -398,10 +396,6 @@ globalkeys = gears.table.join(
     awful.key({"Mod1"}, "l", function() controls.lock() end),
     awful.key({ modkey, "Shift" }, "F12", function() controls.lock() end,
               {description = "lock screen", group = "session"}),
-    awful.key({ modkey }, "F5", function() controls.brightness(false) end,
-              {description = "lower brightness", group = "media"}),
-    awful.key({ modkey }, "F6", function() controls.brightness(true) end,
-              {description = "raise brightness", group = "media"}),
     awful.key({ modkey, "Shift" }, "Escape", controls.power_menu,
               {description = "power menu", group = "session"}),
     
@@ -416,14 +410,6 @@ awful.key({ "Control" }, "XF86AudioRaiseVolume", function() controls.audio("up")
 awful.key({ "Control" }, "XF86AudioLowerVolume", function() controls.audio("down") end),
 awful.key({ "Control" }, "XF86AudioMute", function() controls.audio("mute") end),
 awful.key({ "Control" }, "XF86AudioMicMute", function() controls.audio("mic") end),
-
--- brightness
-
-awful.key({}, "XF86MonBrightnessDown", function() controls.brightness(false) end),
-awful.key({}, "XF86MonBrightnessUp", function() controls.brightness(true) end),
-awful.key({ "Control" }, "XF86MonBrightnessDown", function() controls.brightness(false) end),
-awful.key({ "Control" }, "XF86MonBrightnessUp", function() controls.brightness(true) end),
-
 
     -- preconfigured stuff
     awful.key({ modkey,           }, "s",      hotkeys_popup.show_help,
@@ -528,6 +514,25 @@ awful.key({ "Control" }, "XF86MonBrightnessUp", function() controls.brightness(t
     -- dmenu
     --awful.key({ modkey}, "p", function () awful.util.spawn_with_shell("~/.config/dmenu") end)
 )
+
+-- Laptop-only controls: require both a real backlight and brightnessctl.
+if profile.brightness then
+    local function brightness(up)
+        controls.brightness(up, profile.hardware.backlight)
+    end
+    globalkeys = gears.table.join(globalkeys,
+        awful.key({}, "XF86MonBrightnessDown", function() brightness(false) end,
+                  {description = "lower brightness", group = "media"}),
+        awful.key({}, "XF86MonBrightnessUp", function() brightness(true) end,
+                  {description = "raise brightness", group = "media"}),
+        awful.key({ "Control" }, "XF86MonBrightnessDown", function() brightness(false) end),
+        awful.key({ "Control" }, "XF86MonBrightnessUp", function() brightness(true) end),
+        awful.key({ modkey }, "F5", function() brightness(false) end,
+                  {description = "lower brightness", group = "media"}),
+        awful.key({ modkey }, "F6", function() brightness(true) end,
+                  {description = "raise brightness", group = "media"})
+    )
+end
 
 clientkeys = gears.table.join(
     awful.key({ modkey,           }, "f",
@@ -682,6 +687,14 @@ awful.rules.rules = {
     -- { rule = { class = "Firefox" },
     --   properties = { screen = 1, tag = "2" } },
 }
+for _, rule in ipairs(profile.app_rules) do
+    local target = rule.properties.screen
+    if type(target) == "string" then
+        -- Keep app placement usable when a configured output is disconnected.
+        rule.properties.screen = function(c) return screen[target] or c.screen end
+    end
+    table.insert(awful.rules.rules, rule)
+end
 -- }}}
 
 -- {{{ Signals
@@ -779,16 +792,29 @@ client.connect_signal("property::fullscreen", function (c)
 end)
 
 -- Autostart Applications
-for _, script in ipairs({ "monitor_hotplug.sh", "connect_keyboard.sh" }) do
-    local path = os.getenv("HOME") .. "/scripts/" .. script
-    if gears.filesystem.file_readable(path) then awful.spawn(path) end
+-- Only run the selected profile's monitor script; laptop defaults leave outputs alone.
+-- Legacy hardware scripts and Syncthing remain opt-in, not automatic.
+local monitor_script = profile.monitor_script
+if monitor_script and gears.filesystem.file_readable(monitor_script) then
+    awful.spawn.easy_async({ "/bin/sh", monitor_script }, function(_, stderr, _, code)
+        if code ~= 0 then
+            naughty.notify {
+                preset = naughty.config.presets.critical,
+                title = "Monitor layout not applied",
+                text = gears.string.xml_escape(stderr),
+            }
+        end
+    end)
 end
--- These daemons do not create clients, so spawn.once cannot detect them.
-awful.spawn.with_shell("pgrep -u \"$(id -u)\" -x syncthing >/dev/null || "
-    .. "exec /usr/bin/syncthing serve --no-browser --logfile=default")
--- Merge only our lock-dialog resources; preserve other X resources.
+-- Start one compositor for this user; do not compete with Picom/Compton.
+if profile.compositor and gears.filesystem.file_readable("/usr/bin/picom") then
+    awful.spawn.with_shell("pgrep -u \"$(id -u)\" -x picom >/dev/null || "
+        .. "pgrep -u \"$(id -u)\" -x compton >/dev/null || "
+        .. "exec picom --config \"$HOME/.config/picom/picom.conf\"")
+end
+-- Merge cursor defaults and lock-dialog styling; preserve other X resources.
 awful.spawn.easy_async({ "xrdb", "-merge", os.getenv("HOME") .. "/.Xresources" }, function()
     awful.spawn.with_shell("pgrep -u \"$(id -u)\" -x xscreensaver >/dev/null || "
         .. "exec xscreensaver -no-splash")
 end)
-awful.spawn("gsettings set org.gnome.desktop.interface color-scheme prefer-dark")
+require("appearance").apply()

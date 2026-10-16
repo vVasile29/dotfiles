@@ -1,4 +1,8 @@
-! XScreenSaver 6.x dialog resources. No compositor or animated lock background.
+! Keep X11 clients consistent instead of deriving cursor size from screen height.
+Xcursor.theme: Adwaita
+Xcursor.size: 24
+
+! XScreenSaver 6.x dialog resources. No animated lock background.
 ! Match the application class; * spans theme levels and Dialog matches passwd/splash.
 XScreenSaver*Dialog.headingFont: Lato Bold 16
 XScreenSaver*Dialog.bodyFont: Lato 12

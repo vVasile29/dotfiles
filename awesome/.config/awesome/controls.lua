@@ -67,8 +67,10 @@ local function failed(title, stderr)
     }
 end
 
-function controls.brightness(up)
-    awful.spawn.easy_async({ "brightnessctl", "--class=backlight", "--min-value=1",
+function controls.brightness(up, device)
+    if not device then return end
+    awful.spawn.easy_async({ "brightnessctl", "--device=" .. device,
+        "--class=backlight", "--min-value=1",
         "--machine-readable", "set", up and "+5%" or "5%-" },
         function(stdout, stderr, _, code)
             if code ~= 0 then

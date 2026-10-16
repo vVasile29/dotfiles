@@ -4,6 +4,7 @@ local gears = require("gears")
 local wibox = require("wibox")
 local GLib = require("lgi").GLib
 local controls = require("controls")
+local usage_history = require("usage_history")
 local dpi = beautiful.xresources.apply_dpi
 local p = beautiful.palette
 local status = {}
@@ -19,6 +20,19 @@ local function read(path)
     local text = file:read("*a") or ""
     file:close()
     return text
+end
+
+local boot_id = read("/proc/sys/kernel/random/boot_id"):match("^([%x%-]+)")
+status.history_path = gears.filesystem.get_cache_dir() .. "usage-history.tsv"
+status.history = usage_history.load(status.history_path, boot_id)
+local last_saved, save_warning = 0, false
+function status.save_history()
+    local ok, err = usage_history.save(status.history_path, boot_id, status.history)
+    if not ok and not save_warning then
+        gears.debug.print_warning("Could not save usage history: " .. tostring(err))
+        save_warning = true
+    end
+    return ok
 end
 
 local function numbers(text)
@@ -93,6 +107,17 @@ local function sample()
         state.ram = 100 * state.used / state.total
     end
 
+    -- Advance only on actual samples, never on audio events or hover updates.
+    local uptime = tonumber(read("/proc/uptime"):match("^(%S+)"))
+    if uptime then
+        status.history.cpu:push(state.cpu, uptime)
+        status.history.ram:push(state.ram, uptime)
+        if uptime - last_saved >= 30 then
+            status.save_history()
+            last_saved = uptime
+        end
+    end
+
     state.interface = route_interface()
     local now = GLib.get_monotonic_time() / 1000000
     state.down, state.up = 0, 0
@@ -160,13 +185,14 @@ local function subscribe_audio()
 end
 audio_retry:connect_signal("timeout", subscribe_audio)
 awesome.connect_signal("exit", function()
+    status.save_history()
     stopping = true
     audio_retry:stop()
     audio_debounce:stop()
     if subscriber then awesome.kill(subscriber, 15) end
 end)
 
-local function card(glyph, label, color, value_width, meter)
+local function card(glyph, label, color, value_width, meter, history)
     local icon = wibox.widget {
         text = glyph, font = "FontAwesome 11", align = "center",
         forced_width = dpi(17), widget = wibox.widget.textbox,
@@ -213,21 +239,25 @@ local function card(glyph, label, color, value_width, meter)
     }
     widget:connect_signal("mouse::enter", function() widget.shape_border_color = color end)
     widget:connect_signal("mouse::leave", function() widget.shape_border_color = p.surface .. "80" end)
-    local tip = awful.tooltip { objects = { widget }, delay_show = 0.35, preferred_positions = { "bottom" } }
+    local history_view = history and usage_history.attach(widget, history, label .. " HISTORY", color)
+    local tip = not history and awful.tooltip {
+        objects = { widget }, delay_show = 0.35, preferred_positions = { "bottom" },
+    }
     return {
         widget = widget,
+        history_view = history_view,
         set = function(text, tint, percent, tooltip, symbol)
             value.markup = span(text, tint, "DejaVu Sans Mono Bold 9")
             icon.markup = span(symbol or glyph, tint, "FontAwesome 11")
             if gauge then gauge.value = percent or 0; gauge.color = tint end
-            tip:set_text(tooltip)
+            if history_view then history_view:update(percent, tint, tooltip) else tip:set_text(tooltip) end
         end,
     }
 end
 
 function status.new(terminal)
-    local cpu = card("", "CPU", p.accent, 36, true)
-    local ram = card("", "RAM", p.pink, 49, true)
+    local cpu = card("", "CPU", p.accent, 36, true, status.history.cpu)
+    local ram = card("", "RAM", p.pink, 49, true, status.history.ram)
     -- Reserve room for both rates even while idle/offline, avoiding bar reflows.
     local net = card("", "", p.green, 80)
     local volume = card("", "", p.accent, 36)
@@ -246,6 +276,7 @@ function status.new(terminal)
         cpu.widget, ram.widget, net.widget, volume.widget,
         spacing = dpi(6), layout = wibox.layout.fixed.horizontal,
     }
+    view.history_charts = { cpu.history_view, ram.history_view }
     view.update = function()
         cpu.set(state.cpu and string.format("%.0f%%", state.cpu) or "—",
             load_color(state.cpu, p.accent), state.cpu,

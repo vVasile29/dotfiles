@@ -1,0 +1,6 @@
+# Legacy GTK2 applications; the theme's engine may require gtk2-engines-murrine.
+gtk-theme-name="Dracula"
+gtk-icon-theme-name="Adwaita"
+gtk-font-name="Lato 10"
+gtk-cursor-theme-name="Adwaita"
+gtk-cursor-theme-size=24

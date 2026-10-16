@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+# Each computer selects its own Awesome profile; never synchronize the selector.
+/awesome/.config/awesome/machine.lua
 *.key
 *.pem
 
