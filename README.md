@@ -22,6 +22,8 @@ help, calendar, window borders and a near-black purple background. Rofi uses
 the same palette and Lato UI typography. Alacritty is opaque with DejaVu Sans
 Mono and the bundled Dracula TOML theme. There is no compositor, blur,
 animation service, or continuously polling audio/brightness widget.
+The right side of the wibar has Dracula status cards for CPU, RAM, network
+and volume, plus the system tray and a clock with seconds.
 Only the named packages above are Stow packages; do not use `stow *`.
 
 ## Install on another PC
@@ -29,7 +31,7 @@ Only the named packages above are Stow packages; do not use `stow *`.
 On Debian/Ubuntu, install the core applications and the font used by the bar:
 
 ```sh
-sudo apt install git stow awesome alacritty fonts-lato fonts-dejavu-core rofi brightnessctl pulseaudio-utils xscreensaver x11-xserver-utils libglib2.0-bin
+sudo apt install git stow awesome alacritty fonts-lato fonts-dejavu-core fonts-font-awesome rofi brightnessctl pulseaudio-utils pavucontrol htop network-manager-gnome xscreensaver x11-xserver-utils libglib2.0-bin
 git clone https://github.com/vVasile29/dotfiles.git "$HOME/.dotfiles"
 stow --dir="$HOME/.dotfiles" --target="$HOME" --no-folding --simulate --verbose awesome alacritty rofi gtk xscreensaver
 stow --dir="$HOME/.dotfiles" --target="$HOME" --no-folding --verbose awesome alacritty rofi gtk xscreensaver
@@ -105,6 +107,21 @@ than immediately at daemon startup. No animated screensaver runs in blank mode.
 | Alt+L or Super+Shift+F12 | Lock screen |
 | Super+Shift+Escape | Session menu: lock, suspend, log out, reboot, power off |
 | Left-click clock | Toggle calendar; scroll to change month; click calendar to close |
+| Left-click CPU or RAM | Open `htop` in Alacritty |
+| Left-click network | Open `nm-connection-editor` |
+| Scroll volume | Volume -/+5%, with OSD |
+| Left/right-click volume | Mute / open `pavucontrol` |
+
+The status module (`awesome/.config/awesome/status.lua`) shares a single
+two-second CPU/RAM/network sampler across all monitors. Memory usage excludes
+available/reclaimable memory. Network traffic follows the default route, not
+Docker bridges; rates appear above 1 KiB/s, with details on hover. `LINK` means
+a default route exists, not that Internet access has been verified. Audio is
+event-driven via one `pactl subscribe` process, cleaned up on Awesome exit/reload.
+Chips reserve fixed space for their readings, including idle/active network
+traffic, so updates do not shift the task list. CPU/RAM meters turn yellow
+above 75% and red above 90%. FontAwesome supplies the
+icons. The clock uses fixed-width digits and a shorter date on narrow monitors.
 
 The session menu confirms logout/reboot/power-off and requests a lock before
 suspending. OSD updates are event-driven; their timer runs only while visible.

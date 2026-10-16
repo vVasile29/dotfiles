@@ -51,6 +51,7 @@ end
 -- Themes define colours, icons, font and wallpapers.
 beautiful.init(gears.filesystem.get_configuration_dir() .. "theme.lua")
 local controls = require("controls")
+local status = require("status")
 naughty.config.padding = beautiful.xresources.apply_dpi(10)
 naughty.config.spacing = beautiful.xresources.apply_dpi(8)
 for name, color in pairs({ critical = beautiful.palette.urgent,
@@ -303,8 +304,9 @@ awful.screen.connect_for_each_screen(function(s)
     awful.tooltip { objects = { launcher }, text = "Applications | Right-click: terminal" }
 
     s.mytextclock = wibox.widget.textclock(
-        '<span foreground="' .. bar.muted .. '">%a %d %b</span>  '
-            .. '<span foreground="' .. bar.accent .. '"><b>%H:%M</b></span>', 30
+        '<span foreground="' .. bar.muted .. '">'
+            .. (s.geometry.width < dpi(1600) and "%d %b" or "%a %d %b") .. '</span>  '
+            .. '<span foreground="' .. bar.fg .. '" font_desc="DejaVu Sans Mono Bold 10">%H:%M:%S</span>', 1
     )
     s.mytextclock.font = bar.font
     s.calendar = awful.widget.calendar_popup.month {
@@ -325,6 +327,8 @@ awful.screen.connect_for_each_screen(function(s)
     tray:set_screen("primary")
     tray:set_base_size(dpi(18))
 
+    s.mystatus = status.new(terminal)
+
     local content = wibox.widget {
         layout = wibox.layout.align.horizontal,
         { -- Left widgets
@@ -343,6 +347,7 @@ awful.screen.connect_for_each_screen(function(s)
         { -- Right widgets
             layout = wibox.layout.fixed.horizontal,
             spacing = dpi(8),
+            s.mystatus,
             {
                 tray,
                 top = dpi(5),
@@ -533,8 +538,6 @@ clientkeys = gears.table.join(
         {description = "toggle fullscreen", group = "client"}),
     awful.key({"Control"   }, "q",      function (c) c:kill()                         end,
               {description = "close", group = "client"}),
-    awful.key({ modkey, "Control" }, "space",  awful.client.floating.toggle                     ,
-              {description = "toggle floating", group = "client"}),
     awful.key({ modkey, "Control" }, "Return", function (c) c:swap(awful.client.getmaster()) end,
               {description = "move to master", group = "client"}),
     awful.key({ modkey,           }, "o",      function (c) c:move_to_screen()               end,
@@ -547,25 +550,7 @@ clientkeys = gears.table.join(
             -- minimized, since minimized clients can't have the focus.
             c.minimized = true
         end ,
-        {description = "minimize", group = "client"}),
-    awful.key({ modkey,           }, "m",
-        function (c)
-            c.maximized = not c.maximized
-            c:raise()
-        end ,
-        {description = "(un)maximize", group = "client"}),
-    awful.key({ modkey, "Control" }, "m",
-        function (c)
-            c.maximized_vertical = not c.maximized_vertical
-            c:raise()
-        end ,
-        {description = "(un)maximize vertically", group = "client"}),
-    awful.key({ modkey, "Shift"   }, "m",
-        function (c)
-            c.maximized_horizontal = not c.maximized_horizontal
-            c:raise()
-        end ,
-        {description = "(un)maximize horizontally", group = "client"})
+        {description = "minimize", group = "client"})
 )
 
 -- Bind all key numbers to tags.
@@ -683,6 +668,11 @@ awful.rules.rules = {
         }
       }, properties = { floating = true }},
 
+    -- Keep normal windows tiled; dialogs and pop-ups may still float.
+    { rule = { type = "normal" },
+      properties = { floating = false, maximized = false,
+                     maximized_vertical = false, maximized_horizontal = false } },
+
     -- Add titlebars to normal clients and dialogs
     { rule_any = {type = { "normal", "dialog" }
       }, properties = { titlebars_enabled = false }
@@ -695,6 +685,21 @@ awful.rules.rules = {
 -- }}}
 
 -- {{{ Signals
+-- Reject app requests and restored state for these modes, but allow fullscreen.
+local function keep_tiled(c)
+    if c.type ~= "normal" then return end
+    if c.floating then c.floating = false end
+    if c.maximized then c.maximized = false end
+    if c.maximized_vertical then c.maximized_vertical = false end
+    if c.maximized_horizontal then c.maximized_horizontal = false end
+end
+
+client.connect_signal("manage", keep_tiled)
+for _, property in ipairs({ "floating", "maximized", "maximized_vertical",
+    "maximized_horizontal", "type" }) do
+    client.connect_signal("property::" .. property, keep_tiled)
+end
+
 -- Signal function to execute when a new client appears.
 client.connect_signal("manage", function (c)
     -- Set the windows at the slave,
@@ -738,8 +743,6 @@ client.connect_signal("request::titlebars", function(c)
             layout  = wibox.layout.flex.horizontal
         },
         { -- Right
-            awful.titlebar.widget.floatingbutton (c),
-            awful.titlebar.widget.maximizedbutton(c),
             awful.titlebar.widget.stickybutton   (c),
             awful.titlebar.widget.ontopbutton    (c),
             awful.titlebar.widget.closebutton    (c),
