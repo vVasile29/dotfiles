@@ -123,7 +123,7 @@ local function sample()
     state.down, state.up = 0, 0
     for line in read("/proc/net/dev"):gmatch("[^\n]+") do
         local name, counters = line:match("^%s*([^:%s]+):%s*(.*)")
-        if name == state.interface then
+        if name and name == state.interface then
             local values = numbers(counters)
             if values[1] and values[9] then
                 if previous_net and previous_net.name == name and now > previous_net.time then

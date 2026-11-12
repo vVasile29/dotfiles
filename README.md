@@ -126,6 +126,7 @@ Profile tests can be run from the repository in an existing Awesome session:
 ```sh
 python3 tests/test_awesome_profiles.py
 python3 tests/test_awesome_history.py
+python3 tests/test_awesome_status.py
 ```
 
 They use temporary sysfs/config fixtures and do not change the live profile,
